@@ -289,7 +289,12 @@ TSWLatexianTemp*
 #*Notes.bib
 
 
+
+
 ## Java
+# IDEA
+.idea
+
 # Compiled class file
 *.class
 
