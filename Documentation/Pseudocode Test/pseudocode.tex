@@ -1,0 +1,66 @@
+\documentclass[a4paper,kulak]{kulakarticle} %options: kul or kulak (default)
+
+\usepackage[dutch]{babel}
+\usepackage[ruled]{algorithm2e}
+
+\date{Academiejaar 2020 -- 2021}
+\address{
+  Bachelor Informatica \\
+  Gegevensstructuren \& Algoritmen \\
+  Jan Goedgebeur \ Jarne Renders}
+\title{grafenkleuring pseudocode}
+\author{Dieter Demuynck}
+
+
+\begin{document}
+
+\maketitle
+
+\section*{Pseudocode GCP}
+
+\begin{algorithm}
+	\caption{General algorithm for the GCP}\label{alg:GCP}
+	\KwData{fileLocation}
+	\KwResult{graph}
+	graph $\gets$ import(fileLocation)\;
+	preprocess(graph)\;
+	contructColoring(graph)\;
+	improveColoring(graph, A, d);
+\end{algorithm}
+
+\begin{function}
+	\caption{preprocess(graph)}\label{func:preprocess}
+	
+	\ForEach{vertex1 $\in$ graph.vertices}{
+		\ForEach{vertex2 $\in$ graph.vertices}{
+			\If{vertex1.adjacentVertices $\subseteq$ vertex2.adjacentVertices}{
+				vertex1 $\gets$ vertex2\;
+				graph.remove(vertex1)\;
+			}
+		}
+	}
+\end{function}
+
+\begin{function}
+	\caption{constructColoring(graph, k)}\label{func:color_contruction}
+	
+	uncoloredCount $\gets$ graph.vertices.size\;
+	\While{uncoloredCount $\neq$ 0}{
+		vertex $\gets$ maxSaturation(graph.vertices)\;
+		colorClass = vertex.saturation + 1\;
+		\eIf{colorClass >= k}{
+			vertex.color $\gets$ randint(0, k-1)\;
+		}{
+			vertex.color $\gets$ colorClass
+		}
+	}	
+\end{function}
+
+\begin{function}
+	\caption{improveColoring(graph, A, d)}\label{func:color_improvement}
+	
+	tti $\gets$ 0
+	
+\end{function}
+
+\end{document}
