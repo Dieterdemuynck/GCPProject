@@ -1,6 +1,4 @@
-import java.util.Collection;
-import java.util.Collections;
-import java.util.Random;
+import java.util.*;
 
 public class Vertex{
     private final int id;
@@ -22,8 +20,17 @@ public class Vertex{
     }
 
     public int getSaturation(){
-        //wip
-        return 0;
+        // TODO: using the known colorCount, we could optimize the .contains to a constant search time.
+        List<Integer> connectedColors = new ArrayList<>();
+        int saturation = 0;
+        for (Vertex vertex: adjacentVertices){
+            if (connectedColors.contains(vertex.getColor())){
+                saturation++;
+            } else {
+                connectedColors.add(vertex.getColor());
+            }
+        }
+        return saturation;
     }
 
     public void addVertices(Collection<Vertex> adjacentVertices){

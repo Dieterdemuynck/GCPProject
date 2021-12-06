@@ -1,20 +1,20 @@
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
+import java.util.Comparator;
 
 public class Graph implements GraphInterface{
-    // TODO: Decide to keep this or change to/add a list with ALL vertices for constant search time
     private ArrayList<Vertex> vertices;
-    private ArrayList<Vertex> reducedVertices;
+    private ArrayList<Vertex> validVertices;
     private ArrayList<Vertex> inConflictVertices;
 
     @Override
     public Collection<Integer> getNodes() {
         /*
-         * Returns list of the "viable" or non-reduced nodes only.
+         * Returns list of the valid or non-reduced nodes only.
          */
         Collection<Integer> vertexIds = new java.util.ArrayList<>(Collections.emptyList());
-        for (Vertex vertex: vertices){
+        for (Vertex vertex: validVertices){
             vertexIds.add(vertex.getId());
         }
         return vertexIds;
@@ -23,7 +23,7 @@ public class Graph implements GraphInterface{
     @Override
     public int getNumberOfEdges() {
         int edgeCount = 0;
-        for (Vertex vertex: vertices){
+        for (Vertex vertex: validVertices){
             edgeCount += vertex.adjacentVertices.size();
         }
         // So far, we counted every edge twice. (A has B in adjacentVertices, but B also has A)
@@ -32,22 +32,22 @@ public class Graph implements GraphInterface{
 
     @Override
     public int getNumberOfNodes() {
-        return vertices.size() + reducedVertices.size();
+        return validVertices.size();
     }
 
     @Override
     public boolean areNeighbors(int u, int v) {
-        Vertex vertexU = searchByID(u);
-        Vertex vertexV = searchByID(v);
+        Vertex vertexU = vertices.get(u);
+        Vertex vertexV = vertices.get(v);
         if (vertexU.isReduced() || vertexV.isReduced()){
-            throw new IllegalArgumentException("Vertices may not be reduced");
+            throw new IllegalArgumentException("Vertices may not be reduced vertices");
         }
         return vertexU.adjacentVertices.contains(vertexV);
     }
 
     @Override
     public int getDegree(int u) {
-        return searchByID(u).getDegree();
+        return vertices.get(u).getDegree();
     }
 
     @Override
@@ -55,11 +55,12 @@ public class Graph implements GraphInterface{
         /*
          * Fully removes a node from the graph.
          */
-        Vertex vertexU = searchByID(u);
-        vertices.remove(vertexU);
+        Vertex vertexU = vertices.get(u);
+        validVertices.remove(vertexU);
         for (Vertex adjVertex: vertexU.adjacentVertices){
-            adjVertex.removeEdge(adjVertex);
+            adjVertex.removeEdge(vertexU);
         }
+        vertices.set(u, null);  // I believe this deletes all references to the vertex, which means the garbage collector will delete it
     }
 
     @Override
@@ -67,15 +68,15 @@ public class Graph implements GraphInterface{
         /*
          * Fully removes an edge from the graph.
          */
-        Vertex vertexU = searchByID(u);
-        Vertex vertexV = searchByID(v);
+        Vertex vertexU = vertices.get(u);
+        Vertex vertexV = vertices.get(v);
         vertexU.removeEdge(vertexV);
         vertexV.removeEdge(vertexU);
     }
 
     @Override
     public Collection<Integer> getNeighborsOf(int u) {
-        Vertex vertex = searchByID(u);
+        Vertex vertex = vertices.get(u);
         Collection<Integer> vertexIds = new java.util.ArrayList<>(Collections.emptyList());
         for (Vertex adjVertex: vertex.adjacentVertices){
             vertexIds.add(adjVertex.getId());
@@ -85,8 +86,9 @@ public class Graph implements GraphInterface{
 
     @Override
     public void applyReduction() {
-        if (reducedVertices == null) {
-            reducedVertices = new ArrayList<>();
+        if (validVertices == null) {
+            validVertices = new ArrayList<>();
+            Collections.copy(validVertices, vertices);
         }
 
         for (int i = 0, verticesSize = vertices.size(); i < verticesSize; i++) {
@@ -106,32 +108,40 @@ public class Graph implements GraphInterface{
 
                 if (vertex1.adjacentVertices.containsAll(vertex2.adjacentVertices)){
                     vertex2.reduceTo(vertex1);  // 2 is subset of 1
-                    reducedVertices.add(vertex2);
+                    validVertices.set(j, null);
                 } else if (vertex2.adjacentVertices.containsAll(vertex1.adjacentVertices)){
                     vertex1.reduceTo(vertex2);  // 1 is subset of 2
-                    reducedVertices.add(vertex1);
+                    validVertices.set(i, null);
                 }
             }
         }
 
-        // Remove the reduced vertices from the "main" graph
-        vertices.removeAll(reducedVertices);
-        reducedVertices.sort();  // TODO: understand Comparator objects and sort vertices based on IDs.
+        // Remove the remaining null objects from the validVertices list, and sort by degree.
+        // "Degree-sorting" will be helpful for applying the DSATUR algorithm.
+        validVertices.removeAll(Collections.singleton(null));
+        validVertices.sort(new DegreeComparator());  // yea this should work
     }
 
     @Override
     public void applyConstructionHeuristic() {
-        // TODO: decide wether to sort on degree before applying DSATUR
-        // That should speed up the algorithm, but would make searchByIndex not work.
-        int uncoloredCount = vertices.size();
+        for (int uncoloredCount = validVertices.size(); uncoloredCount > 0; uncoloredCount--){
+            Vertex maxSaturVertex = maximalSaturatedVertex();
+        }
 
     }
 
     public Vertex maximalSaturatedVertex(){
-        for (Vertex vertex: vertices){
-
+        // TODO: fix for finding a first vertex
+        Vertex maxSaturVertex = null;
+        int maxSaturation = 0;
+        int currentSaturation;
+        for (Vertex vertex: validVertices){
+            currentSaturation = vertex.getSaturation();
+            if (vertex.getColor() == -1 && currentSaturation > maxSaturation){
+                maxSaturVertex = vertex;
+            }
         }
-        return null;
+        return maxSaturVertex;
     }
 
     @Override
@@ -141,31 +151,16 @@ public class Graph implements GraphInterface{
 
     @Override
     public int getColor(int u) {
-        return searchByID(u).getColor();
+        return vertices.get(u).getColor();
     }
 
-    public Vertex searchByID(int id){
-        Vertex vertex = searchByID(id, vertices);
-        if (vertex == null){  // Vertex hasn't been found yet, perhaps it is part of the reduced vertices
-            return searchByID(id, reducedVertices);
-        }
-        return vertex;
-    }
+}
 
-    public Vertex searchByID(int id, ArrayList<Vertex> vertexCollection){
-        int leftMost = 0;
-        int rightMost = vertices.size() - 1;
-        int center = rightMost/2;
-        while (leftMost <= rightMost) {
-            if (vertexCollection.get(center).getId() < id) {
-                leftMost = center + 1;
-            } else if (vertexCollection.get(center).getId() > id) {
-                rightMost = center - 1;
-            } else {
-                return vertexCollection.get(center);  // found the element
-            }
-            center = (leftMost + rightMost) / 2;
-        }
-        return null;
+
+class DegreeComparator implements Comparator<Vertex>{
+
+    @Override
+    public int compare(Vertex v0, Vertex v1) {
+        return Integer.compare(v0.getDegree(), v1.getDegree());
     }
 }
