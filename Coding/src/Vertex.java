@@ -19,18 +19,28 @@ public class Vertex{
         return adjacentVertices.size();
     }
 
-    public int getSaturation(){
-        // TODO: using the known colorCount, we could optimize the .contains to a constant search time.
-        List<Integer> connectedColors = new ArrayList<>();
+    public int getSaturation(int colorCount){
+        boolean[] connectedColors = new boolean[colorCount];  // Default all false
         int saturation = 0;
         for (Vertex vertex: adjacentVertices){
-            if (connectedColors.contains(vertex.getColor())){
+            if (!connectedColors[vertex.getColor()]){
+                // The vertex' color has not yet been found. Saturation can increase.
+                connectedColors[vertex.getColor()] = true;
                 saturation++;
-            } else {
-                connectedColors.add(vertex.getColor());
             }
         }
         return saturation;
+    }
+
+    public boolean[] getConnectedColors(int colorCount){
+        boolean[] connectedColors = new boolean[colorCount];  // Default all false
+        for (Vertex vertex: adjacentVertices){
+            if (!connectedColors[vertex.getColor()]){
+                // The vertex' color has not yet been found. Saturation can increase.
+                connectedColors[vertex.getColor()] = true;
+            }
+        }
+        return connectedColors;
     }
 
     public void addVertices(Collection<Vertex> adjacentVertices){
