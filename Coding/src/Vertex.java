@@ -20,6 +20,7 @@ public class Vertex{
     }
 
     public int getSaturation(int colorCount){
+        // TODO: research BitSets
         boolean[] connectedColors = new boolean[colorCount];  // Default all false
         int saturation = 0;
         for (Vertex vertex: adjacentVertices){
@@ -43,13 +44,17 @@ public class Vertex{
         return connectedColors;
     }
 
-    public void addVertices(Collection<Vertex> adjacentVertices){
+    public void addConnections(Collection<Vertex> adjacentVertices){
         this.adjacentVertices = adjacentVertices;
+    }
+
+    public void addConnection(Vertex vertex){
+        this.adjacentVertices.add(vertex);
     }
 
     public void setTabooTimer(int time, int A, int delta, int conflictCount){
         Random r = new Random();
-        tabooTimer = time + r.nextInt(A + 1) + delta * conflictCount;  // This *should* give a random integer
+        tabooTimer = time + r.nextInt(A+1) + delta * conflictCount;  // This *should* give a random integer
     }
 
     public int getTabooTimer(){
