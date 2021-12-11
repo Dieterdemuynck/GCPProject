@@ -6,6 +6,7 @@ public class Vertex{
     private Vertex reducedTo = null;
     private int color = -1;
     private int tabooTimer = 0;
+    private int conflictCount = 0;
 
     public Vertex(int id){
         this.id = id;
@@ -20,13 +21,12 @@ public class Vertex{
     }
 
     public int getSaturation(int colorCount){
-        // TODO: research BitSets
-        boolean[] connectedColors = new boolean[colorCount];  // Default all false
+        BitSet connectedColors = new BitSet(colorCount);  // Default all false
         int saturation = 0;
         for (Vertex vertex: adjacentVertices){
-            if (!connectedColors[vertex.getColor()]){
+            if (!connectedColors.get(vertex.getColor())){
                 // The vertex' color has not yet been found. Saturation can increase.
-                connectedColors[vertex.getColor()] = true;
+                connectedColors.flip(vertex.getColor());
                 saturation++;
             }
         }
@@ -44,11 +44,7 @@ public class Vertex{
         return connectedColors;
     }
 
-    public void addConnections(Collection<Vertex> adjacentVertices){
-        this.adjacentVertices = adjacentVertices;
-    }
-
-    public void addConnection(Vertex vertex){
+    public void addEdge(Vertex vertex){
         this.adjacentVertices.add(vertex);
     }
 
@@ -61,11 +57,66 @@ public class Vertex{
         return tabooTimer;
     }
 
-    public void setColor(int color) {
+    public void setColor(int color){
         this.color = color;
     }
 
-    public int getColor() {
+    public int changeColor(int color){  // O(|E|)
+        // specifically designed when changing from a feasible color, to a potentially infeasible color
+        // This function is also designed to return the net amount of infeasible edges, if desired.
+        int netInfeasibleEdges = 0;
+        assert color != this.color;
+        for (Vertex vertex: adjacentVertices){
+            if (vertex.getColor() == color){
+                // The new color causes a conflict.
+                increaseConflictCount();
+                vertex.increaseConflictCount();
+                netInfeasibleEdges++;
+            } else if (vertex.getColor() == this.color){
+                // The old color caused a conflict. Changing the color will remove this conflict.
+                decreaseConflictCount();
+                vertex.decreaseConflictCount();
+                netInfeasibleEdges--;
+            }
+        }
+        this.color = color;
+        return netInfeasibleEdges;
+    }
+
+    public int calculateNetInfeasibleEdgeCount(int color){  // O(|E|)
+        // Calculates the amount of net infeasible edges after changing to the specified color
+        // specifically designed when changing from a feasible color, to a potentially infeasible color
+        // This function is also designed to return the net amount of infeasible edges, if desired.
+        int netInfeasibleEdges = 0;
+        for (Vertex vertex: adjacentVertices){
+            if (vertex.getColor() == color){
+                netInfeasibleEdges++;
+            } else if (vertex.getColor() == this.color){
+                // The old color caused a conflict. Changing the color will remove this conflict.
+                netInfeasibleEdges--;
+            }
+        }
+        return netInfeasibleEdges;
+    }
+
+    public void increaseConflictCount(){
+        conflictCount++;
+    }
+
+    public void decreaseConflictCount(){
+        assert conflictCount > 0;
+        conflictCount--;
+    }
+
+    public boolean isInConflict(){
+        return conflictCount == 0;
+    }
+
+    public int getConflictCount(){
+        return conflictCount;
+    }
+
+    public int getColor(){
         if (reducedTo == null){
             return color;
         } else {

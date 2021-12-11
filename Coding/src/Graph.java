@@ -5,7 +5,6 @@ import java.util.*;
 public class Graph implements GraphInterface{
     private Vertex[] vertices;
     private ArrayList<Vertex> validVertices;
-    private ArrayList<Vertex> inConflictVertices;
     private int colorCount = 0;
 
     public Graph(String fileLocation){
@@ -17,11 +16,11 @@ public class Graph implements GraphInterface{
                     String[] vertexIdStrings = input.split(" ");
                     assert vertices != null;  // IntelliJ recommended this? what it does? No one knows?
 
-                    // in the DIMACS notation, vertex ids starts at 1. Here, we start at 0.
+                    // in the notation used in the given files, vertex ids starts at 1. Here, we start at 0.
                     Vertex vertex1 = vertices[Integer.parseInt(vertexIdStrings[1]) - 1];
                     Vertex vertex2 = vertices[Integer.parseInt(vertexIdStrings[2]) - 1];
-                    vertex1.addConnection(vertex2);
-                    vertex2.addConnection(vertex1);
+                    vertex1.addEdge(vertex2);
+                    vertex2.addEdge(vertex1);
 
                 } else if (input.charAt(0) == 'p'){
                     // create vertices:
@@ -121,7 +120,7 @@ public class Graph implements GraphInterface{
             validVertices = new ArrayList<>(Arrays.asList(vertices));
             // TODO: This may not make a copy, but rather just wrap the original.
             // According to some guy on StackOverflow, the "new ArrayList..." iterates over the elements,
-            // properly creating a copy of the array.
+            // properly creating a copy of the array. We'll have to make sure this is true, however.
         }
 
         for (int i = 0, verticesSize = vertices.length; i < verticesSize; i++) {
@@ -150,7 +149,7 @@ public class Graph implements GraphInterface{
         }
 
         // Remove the remaining null objects from the validVertices list, and sort by degree.
-        // "Degree-sorting" will be helpful for applying the DSATUR algorithm.
+        // "Degree-sorting" will be helpful for applying the DegreeSaturation algorithm.
         // Note: degree must be decreasing.
         validVertices.removeAll(Collections.singleton(null));
         validVertices.sort(new ReverseDegreeComparator());  // yea this should work
@@ -159,8 +158,8 @@ public class Graph implements GraphInterface{
     @Override
     public void applyConstructionHeuristic() {
         for (int uncoloredCount = validVertices.size(); uncoloredCount > 0; uncoloredCount--){
-            Vertex maxSaturVertex = maximalSaturatedVertex();  // O(n*k) with k the number of connected edges
-            boolean[] connectedColors = maxSaturVertex.getConnectedColors(colorCount);  // O(k)
+            Vertex maxSaturatedVertex = maximalSaturatedVertex();  // O(n*k) with k the number of connected edges
+            boolean[] connectedColors = maxSaturatedVertex.getConnectedColors(colorCount);  // O(k)
             int minimalColor = colorCount;
             for (int color = 0; color < connectedColors.length; color++){
                 if (!connectedColors[color]){
@@ -171,27 +170,29 @@ public class Graph implements GraphInterface{
             if (minimalColor == colorCount){
                 colorCount++;  // A new color has been added, colorCount must increase.
             }
-            maxSaturVertex.setColor(minimalColor);
+            maxSaturatedVertex.setColor(minimalColor);
         }
 
     }
 
     public Vertex maximalSaturatedVertex(){
-        Vertex maxSaturVertex = null;
+        Vertex maxSaturatedVertex = null;
         int maxSaturation = -1;
 
         for (Vertex vertex: validVertices){
             if (vertex.getColor() == -1 && vertex.getSaturation(colorCount) > maxSaturation){
                 // The vertex is uncolored and, so far, is the vertex with the largest saturation.
-                maxSaturVertex = vertex;
+                maxSaturatedVertex = vertex;
             }
         }
-        return maxSaturVertex;
+        return maxSaturatedVertex;
     }
 
     @Override
     public void applyStochasticLocalSearchAlgorithm() {
         int tabooClock = 0;
+        int infeasibleEdgeCount = 0;
+        int conflictCount;
 
         // First, we save the current coloring.
         HashMap<Integer,Integer> validColoring = new HashMap<>();
@@ -202,38 +203,78 @@ public class Graph implements GraphInterface{
         // LOOP 1: loop as long as we can
         // "Mess up" the coloring: entirely delete the "last" color (with the largest index),
         // and figure out which vertices are in conflict
-        // TODO: mess up coloring
         long startTime = System.currentTimeMillis();
+        boolean timeNotDepleted = true;
 
-        while (System.currentTimeMillis() - startTime < 10000) {  // TODO: replace with true, move to loop 2
+        while (timeNotDepleted) {
             Random r = new Random();  // object for calculating a random integer
 
             // Messing up the current coloring by removing the last color:
             for (Vertex vertex: validVertices){
                 if (vertex.getColor() == colorCount - 1){
-                    vertex.setColor(r.nextInt(colorCount - 1));
-                    // TODO: Reconsider "inConflict" array: possibility for double vertex addition.
-                    // Perhaps this can be optimized using a bitset?
-                    boolean newConflict = false;
-                    for (Vertex adjVertex: vertex.adjacentVertices){
-                        if (adjVertex.getColor() == vertex.getColor()){
-                            inConflictVertices.add(adjVertex);
-                            newConflict = true;
-                        }
-                    }
-                    if (newConflict){
-                        inConflictVertices.add(vertex);
-                    }
+                    // Upon creating a new, infeasible coloring, we keep track of the new amount of infeasible edges
+                    infeasibleEdgeCount += vertex.changeColor(r.nextInt(colorCount - 1));
                 }
             }
 
-            // LOOP 2: as long as time hasn't exceeded
+            // LOOP 2: as long as a valid coloring hasn't been found
             // Look for vertices which improve the coloring, using the restricted tabu-1-exchange.
-            // TODO: improve coloring using Tabu-1-ex
-            // TODO: find good value for elapsed time check
+            while (infeasibleEdgeCount != 0){
+                // APPLY TABU-1-EX:
+                // Step 1: Find the best vertex with the best color change out of all possibilities
+                Vertex bestVertex;
+                int bestColor;
+                int bestInfeasibleEdgeCount;
+                int iteratedInfeasibleEdgeCount;
+
+                // we take the first vertex at first, and check to see how it changes the infeasibleEdgeCount
+                // after changing it to either the first or the second color.
+                // Then, we check every other vertex and color and keep track of the best one.
+                // Note: this means there is a redundant check to the first vertex, however, as you can clearly see,
+                // this really doesn't bother me because I do not care.
+                bestVertex = validVertices.get(0);
+                bestColor = bestVertex.getColor() == 0 ? 1 : 0;
+                bestInfeasibleEdgeCount = infeasibleEdgeCount + bestVertex.calculateNetInfeasibleEdgeCount(bestColor);
+                for (Vertex vertex: validVertices){
+                    if (vertex.isInConflict()){
+                        for (int i = 0; i < colorCount - 1; i++){
+                            if (vertex.getColor() == i){  // There HAS to be a color change, so we MUST skip this condition.
+                                continue;
+                            }
+                            iteratedInfeasibleEdgeCount = infeasibleEdgeCount + vertex.calculateNetInfeasibleEdgeCount(i);
+                            if (iteratedInfeasibleEdgeCount < bestInfeasibleEdgeCount){
+                                bestInfeasibleEdgeCount = iteratedInfeasibleEdgeCount;
+                                if (vertex.getTabooTimer() < tabooClock)
+                                bestColor = i;
+                                bestVertex = vertex;
+                            }
+                        }
+                    }
+                }
+
+                // Step 2: Calculate the amount of vertices that are in conflict.
+                conflictCount = 0;
+                for (Vertex vertex: validVertices){
+                    if (vertex.isInConflict()){
+                        conflictCount++;
+                    }
+                }
+
+                // Step 3: Apply the color change, and set the tabu timer for the color switched vertex
+                infeasibleEdgeCount += bestVertex.changeColor(bestColor);
+                bestVertex.setTabooTimer(tabooClock, 20, 30, conflictCount);  // TODO: find good values for A and delta
+
+                // Step 4: Check if the time has not yet been depleted
+                if (System.currentTimeMillis() - startTime < 10000){  // TODO: find good value for elapsed time check
+                    timeNotDepleted = false;
+                    break;
+                }
+            }
 
             // END LOOP 2
             // Update validColoring with new coloring
+
+            startTime = System.currentTimeMillis();  // updating startTime, we want to test the next coloring
 
         }
         // END LOOP 1

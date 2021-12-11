@@ -298,8 +298,8 @@ TSWLatexianTemp*
 # Compiled class file
 *.class
 
-# Log file
-*.log
+# Log file - NOTE: already defined in latex stuff. (Dear god, that could end badly)
+# *.log
 
 # BlueJ files
 *.ctxt
@@ -318,3 +318,5 @@ TSWLatexianTemp*
 
 # virtual machine crash logs, see http://www.java.com/en/download/help/error_hotspot.xml
 hs_err_pid*
+
+*.iml
