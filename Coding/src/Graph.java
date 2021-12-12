@@ -8,7 +8,7 @@ public class Graph implements GraphInterface{
     private int colorCount = 0;
 
     public Graph(String fileLocation){
-        try {
+        try {  // using a try block in case the file location is invalid.
             Scanner scanner = new Scanner(new File(fileLocation));
             while (scanner.hasNextLine()) {
                 String input = scanner.nextLine();
@@ -33,8 +33,8 @@ public class Graph implements GraphInterface{
                 }
             }
         } catch (FileNotFoundException e) {
-            System.out.println("An error occurred.");
-            e.printStackTrace();
+            System.out.println("Specified file not found: " + fileLocation);
+            e.printStackTrace();  // found this bit on https://www.w3schools.com/java/java_files_read.asp
         }
     }
 
@@ -43,9 +43,15 @@ public class Graph implements GraphInterface{
         /*
          * Returns list of the valid, non-reduced nodes only.
          */
-        Collection<Integer> vertexIds = new java.util.ArrayList<>(Collections.emptyList());
-        for (Vertex vertex: validVertices){
-            vertexIds.add(vertex.getId());
+        Collection<Integer> vertexIds = new ArrayList<>(Collections.emptyList());
+        if (validVertices != null) {
+            for (Vertex vertex : validVertices) {
+                vertexIds.add(vertex.getId());
+            }
+        } else {
+            for (Vertex vertex : vertices) {
+                vertexIds.add(vertex.getId());
+            }
         }
         return vertexIds;
     }
@@ -53,37 +59,55 @@ public class Graph implements GraphInterface{
     @Override
     public int getNumberOfEdges() {
         int edgeCount = 0;
-        for (Vertex vertex: validVertices){
-            edgeCount += vertex.adjacentVertices.size();
+        if (validVertices != null) {
+            for (Vertex vertex : validVertices) {
+                edgeCount += vertex.adjacentVertices.size();
+            }
+        } else {
+            for (Vertex vertex : vertices) {
+                edgeCount += vertex.adjacentVertices.size();
+            }
         }
-        // So far, we counted every edge twice. (A has B in adjacentVertices, but B also has A)
+        // So far, we counted every edge twice. (A has B in its adjacentVertices, but B also has A)
         return edgeCount/2;
     }
 
     @Override
     public int getNumberOfNodes() {
-        return validVertices.size();
+        /*
+         * Returns the amount of valid, non-reduced vertices.
+         */
+        if (validVertices != null) {
+            return validVertices.size();
+        }
+        return vertices.length;
     }
 
     @Override
     public boolean areNeighbors(int u, int v) {
+        /*
+         * Checks if 2 vertices, given by their ID number, are neighbours.
+         * This should only be done between valid vertices, which can be checked with vertex.isReduced().
+         * The reason for this is that a reduced vertex1 may have vertex2 as its neighbour, but not the other way around.
+         */
         Vertex vertexU = vertices[u];
         Vertex vertexV = vertices[v];
-        if (vertexU.isReduced() || vertexV.isReduced()){
-            throw new IllegalArgumentException("Vertices may not be reduced vertices");
-        }
         return vertexU.adjacentVertices.contains(vertexV);
     }
 
     @Override
     public int getDegree(int u) {
+        /*
+         * Returns the degree of a vertex given by its ID number.
+         */
         return vertices[u].getDegree();
     }
 
     @Override
     public void removeNode(int u) {
         /*
-         * Fully removes a node from the graph.
+         * Removes all references to the given node from the graph.
+         * Note: this means this vertex is lost, and cannot be recovered, unlike a reduced vertex.
          */
         Vertex vertexU = vertices[u];
         validVertices.remove(vertexU);
@@ -106,6 +130,9 @@ public class Graph implements GraphInterface{
 
     @Override
     public Collection<Integer> getNeighborsOf(int u) {
+        /*
+         * Returns an ArrayList with the IDs of the vertices connected to the vertex with ID equal to u.
+         */
         Vertex vertex = vertices[u];
         Collection<Integer> vertexIds = new java.util.ArrayList<>(Collections.emptyList());
         for (Vertex adjVertex: vertex.adjacentVertices){
@@ -118,23 +145,22 @@ public class Graph implements GraphInterface{
     public void applyReduction() {
         if (validVertices == null) {
             validVertices = new ArrayList<>(Arrays.asList(vertices));
-            // TODO: This may not make a copy, but rather just wrap the original.
             // According to some guy on StackOverflow, the "new ArrayList..." iterates over the elements,
-            // properly creating a copy of the array. We'll have to make sure this is true, however.
+            // properly creating a copy of the array.
         }
 
         for (int i = 0, verticesSize = vertices.length; i < verticesSize; i++) {
             Vertex vertex1 = vertices[i];
 
             // Skip any already reduced vertices.
-            if (vertex1.getReducedTo() != null){
+            if (vertex1.isReduced()){
                 continue;
             }
             for (int j = i + 1, size = vertices.length; j < size; j++) {
                 Vertex vertex2 = vertices[j];
 
                 // Skip any already reduced vertices.
-                if (vertex2.getReducedTo() != null){
+                if (vertex2.isReduced()){
                     continue;
                 }
 
@@ -152,17 +178,17 @@ public class Graph implements GraphInterface{
         // "Degree-sorting" will be helpful for applying the DegreeSaturation algorithm.
         // Note: degree must be decreasing.
         validVertices.removeAll(Collections.singleton(null));
-        validVertices.sort(new ReverseDegreeComparator());  // yea this should work
+        validVertices.sort(new ReverseDegreeComparator());
     }
 
     @Override
     public void applyConstructionHeuristic() {
         for (int uncoloredCount = validVertices.size(); uncoloredCount > 0; uncoloredCount--){
             Vertex maxSaturatedVertex = maximalSaturatedVertex();  // O(n*k) with k the number of connected edges
-            boolean[] connectedColors = maxSaturatedVertex.getConnectedColors(colorCount);  // O(k)
+            BitSet connectedColors = maxSaturatedVertex.getConnectedColors(colorCount);  // O(k)
             int minimalColor = colorCount;
-            for (int color = 0; color < connectedColors.length; color++){
-                if (!connectedColors[color]){
+            for (int color = 0; color < connectedColors.size(); color++){
+                if (!connectedColors.get(color)){
                     minimalColor = color;
                     break;
                 }
@@ -190,6 +216,10 @@ public class Graph implements GraphInterface{
 
     @Override
     public void applyStochasticLocalSearchAlgorithm() {
+        if (colorCount == 0){
+            System.out.println("The graph is still uncolored, cannot improve coloring.");
+            return;
+        }
         int tabooClock = 0;
         int infeasibleEdgeCount = 0;
         int conflictCount;
@@ -213,6 +243,7 @@ public class Graph implements GraphInterface{
             for (Vertex vertex: validVertices){
                 if (vertex.getColor() == colorCount - 1){
                     // Upon creating a new, infeasible coloring, we keep track of the new amount of infeasible edges
+                    // The function changeColor keeps track of this for us.
                     infeasibleEdgeCount += vertex.changeColor(r.nextInt(colorCount - 1));
                 }
             }
@@ -244,7 +275,7 @@ public class Graph implements GraphInterface{
                             iteratedInfeasibleEdgeCount = infeasibleEdgeCount + vertex.calculateNetInfeasibleEdgeCount(i);
                             if (iteratedInfeasibleEdgeCount < bestInfeasibleEdgeCount){
                                 bestInfeasibleEdgeCount = iteratedInfeasibleEdgeCount;
-                                if (vertex.getTabooTimer() < tabooClock)
+                                if (vertex.getTabooTimer(i) <= tabooClock)
                                 bestColor = i;
                                 bestVertex = vertex;
                             }
@@ -262,18 +293,23 @@ public class Graph implements GraphInterface{
 
                 // Step 3: Apply the color change, and set the tabu timer for the color switched vertex
                 infeasibleEdgeCount += bestVertex.changeColor(bestColor);
-                bestVertex.setTabooTimer(tabooClock, 20, 30, conflictCount);  // TODO: find good values for A and delta
+                bestVertex.setTabooTimer(tabooClock, 10, 30, conflictCount, bestColor);  // TODO: find good values for A and delta
 
                 // Step 4: Check if the time has not yet been depleted
-                if (System.currentTimeMillis() - startTime < 10000){  // TODO: find good value for elapsed time check
+                if (System.currentTimeMillis() - startTime > 60000){  // TODO: find good value for elapsed time check
                     timeNotDepleted = false;
                     break;
                 }
             }
 
             // END LOOP 2
-            // Update validColoring with new coloring
-
+            // Update validColoring with new coloring, and lower colorCount.
+            if (timeNotDepleted) {
+                for (Vertex vertex : validVertices) {
+                    validColoring.put(vertex.getId(), vertex.getColor());
+                }
+                colorCount--;
+            }
             startTime = System.currentTimeMillis();  // updating startTime, we want to test the next coloring
 
         }
@@ -284,11 +320,22 @@ public class Graph implements GraphInterface{
         }
     }
 
-
+    public int getColorCount() {
+        return colorCount;
+    }
 
     @Override
     public int getColor(int u) {
         return vertices[u].getColor();
+    }
+
+    // This is to test out of the SLS actually works.
+    public void MaximumColorCountColoring(){
+        for (int i = 0, validVerticesSize = validVertices.size(); i < validVerticesSize; i++) {
+            Vertex vertex = validVertices.get(i);
+            vertex.setColor(i);
+        }
+        colorCount = validVertices.size();
     }
 
 }

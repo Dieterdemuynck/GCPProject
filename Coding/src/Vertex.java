@@ -5,7 +5,7 @@ public class Vertex{
     Collection<Vertex> adjacentVertices = new java.util.ArrayList<>(Collections.emptyList());
     private Vertex reducedTo = null;
     private int color = -1;
-    private int tabooTimer = 0;
+    private HashMap<Integer,Integer> tabooTimer = new HashMap<>();
     private int conflictCount = 0;
 
     public Vertex(int id){
@@ -24,7 +24,7 @@ public class Vertex{
         BitSet connectedColors = new BitSet(colorCount);  // Default all false
         int saturation = 0;
         for (Vertex vertex: adjacentVertices){
-            if (!connectedColors.get(vertex.getColor())){
+            if (vertex.getColor() != -1 && !connectedColors.get(vertex.getColor())){
                 // The vertex' color has not yet been found. Saturation can increase.
                 connectedColors.flip(vertex.getColor());
                 saturation++;
@@ -33,12 +33,12 @@ public class Vertex{
         return saturation;
     }
 
-    public boolean[] getConnectedColors(int colorCount){
-        boolean[] connectedColors = new boolean[colorCount];  // Default all false
+    public BitSet getConnectedColors(int colorCount){
+        BitSet connectedColors = new BitSet(colorCount);  // Default all false
         for (Vertex vertex: adjacentVertices){
-            if (!connectedColors[vertex.getColor()]){
+            if (vertex.getColor() != -1 && !connectedColors.get(vertex.getColor())){
                 // The vertex' color has not yet been found. Saturation can increase.
-                connectedColors[vertex.getColor()] = true;
+                connectedColors.set(vertex.getColor(), true);
             }
         }
         return connectedColors;
@@ -48,13 +48,17 @@ public class Vertex{
         this.adjacentVertices.add(vertex);
     }
 
-    public void setTabooTimer(int time, int A, int delta, int conflictCount){
+    public void setTabooTimer(int time, int A, int delta, int conflictCount, int color){
         Random r = new Random();
-        tabooTimer = time + r.nextInt(A+1) + delta * conflictCount;  // This *should* give a random integer
+        int tabooTimer = time + r.nextInt(A+1) + delta * conflictCount;  // This *should* give a random integer
+        this.tabooTimer.put(color, tabooTimer);
     }
 
-    public int getTabooTimer(){
-        return tabooTimer;
+    public int getTabooTimer(int color){
+        if (tabooTimer.get(color) == null){
+            return -1;
+        }
+        return tabooTimer.get(color);
     }
 
     public void setColor(int color){
@@ -112,10 +116,6 @@ public class Vertex{
         return conflictCount == 0;
     }
 
-    public int getConflictCount(){
-        return conflictCount;
-    }
-
     public int getColor(){
         if (reducedTo == null){
             return color;
@@ -126,7 +126,7 @@ public class Vertex{
 
     public void reduceTo(Vertex vertex){
         reducedTo = vertex;
-        // We only remove the edge *TO* this vertex, allowing us to rebuild the original graph
+        // We only remove the edge *TO* this vertex, allowing us to rebuild the original graph, if so desired.
         for (Vertex adjVertex: adjacentVertices){
             adjVertex.removeEdge(vertex);
         }
